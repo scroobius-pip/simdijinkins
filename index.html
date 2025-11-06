@@ -1,0 +1,126 @@
+<html lang="en">
+    <head>
+        <title>Simdi Jinkins</title>
+        <!--<style type="text/css" media="screen">
+            #editor {
+                position: absolute;
+                top: 0;
+                right: 0;
+                bottom: 0;
+                left: 0;
+            }
+            #buttons {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                z-index: 10;
+            }
+        </style>-->
+    </head>
+    <body translate="no">
+        <div id="buttons">
+            <button id="run">Run</button>
+        </div>
+        <div id="editor">
+            <h1>I'm Simdi. Pronounced however you pronounce SIMD.</h1>
+            <p>
+                I'm currently working on
+                <a href="https://fontofweb.com"> fontofweb.com</a>
+                <br />
+                A pinterest alternative for web design.
+            </p>
+            <p></p>
+        </div>
+
+        <div id="state" style="display: none"></div>
+        <div id="output" style="color: red"></div>
+        <script>
+            (function () {
+                // Save the original console.log function
+                var originalLog = console.error;
+                var outputElement = document.getElementById("output");
+
+                // Override console.log with a custom function
+                console.error = function (message) {
+                    // First, call the original logger for standard console output
+                    originalLog.apply(console, arguments);
+
+                    // Then, append the message to our HTML element
+                    if (typeof message === "object") {
+                        // Use JSON.stringify for objects to display their content
+                        outputElement.innerHTML +=
+                            (JSON && JSON.stringify
+                                ? JSON.stringify(message, undefined, 2)
+                                : message) + "<br>";
+                    } else {
+                        outputElement.innerHTML += message + "<br>";
+                    }
+                };
+            })();
+        </script>
+        <script
+            type="text/x-scheme"
+            bootstrap="https://cdn.jsdelivr.net/npm/@jcubic/lips@beta/dist/std.xcb"
+        >
+            (define document globalThis.document)
+            (define window globalThis.window)
+            (define console globalThis.console)
+            (define lips globalThis.lips)
+        </script>
+        <script
+            type="text/x-scheme"
+            bootstrap="https://cdn.jsdelivr.net/npm/@jcubic/lips@beta/dist/std.xcb"
+        >
+            (define Promise globalThis.Promise)
+            (define Array globalThis.Array)
+            (define (load-script-promise url)
+              (new Promise (lambda (resolve reject)
+                (let ((script ((document "createElement") "script")))
+                  (set-obj! script "src" url)
+                  (set-obj! script "onload" resolve)
+                  (set-obj! script "onerror" reject)
+                  (((document "head") "appendChild") script)))))
+            (define preact-url "https://cdn.jsdelivr.net/npm/preact@10.5.5/dist/preact.umd.js")
+            (define ace-url "https://cdnjs.cloudflare.com/ajax/libs/ace/1.43.3/ace.min.js")
+            (define vim-url "https://cdnjs.cloudflare.com/ajax/libs/ace/1.43.3/keybinding-vim.js")
+            (define ace-promise (load-script-promise ace-url))
+            (define vim-promise ((ace-promise "then") (lambda () (load-script-promise vim-url))))
+            (define preact-promise (load-script-promise preact-url))
+            (define (load-editor-state)
+              (let* ((state-div ((document "getElementById") "state"))
+                     (saved-code (or (state-div "textContent") (state-div "innerText")))
+                     (trimmed (if saved-code ((saved-code "trim")) "")))
+                (if (> ((trimmed "length")) 0)
+                    ((editor "setValue") saved-code -1))))
+            (define (save-editor-state)
+              (let ((state-div ((document "getElementById") "state")))
+                (set-obj! state-div "textContent" ((editor "getValue")))))
+            (define (run-code-from-state)
+              (let* ((state-div ((document "getElementById") "state"))
+                     (code (or (state-div "textContent") (state-div "innerText")))
+                     (trimmed (if code ((code "trim")) "")))
+                (if (> ((trimmed "length")) 0)
+                    (let ((promise ((lips "exec") code)))
+                      ((promise "then") (lambda (result) ((console "log") result)))
+                      ((promise "catch") (lambda (e) ((console "error") (e "message"))))))))
+            (((Promise "all") (new Array preact-promise vim-promise)) "then" (lambda ()
+              (define preact globalThis.preact)
+              (define Component preact.Component)
+              (define render preact.render)
+              (define h preact.h)
+              (define ace globalThis.ace)
+              (define editor ((ace "edit") "editor"))
+              ((editor "setTheme") "ace/theme/monokai")
+              (((editor "session") "setMode") "ace/mode/scheme")
+              ((editor "setKeyboardHandler") "ace/keyboard/vim")
+              (load-editor-state)
+              ((editor "on") "change" (lambda () (save-editor-state)))
+              (let ((run-btn ((document "getElementById") "run")))
+                ((run-btn "addEventListener") "click" (lambda () (run-code-from-state))))
+              (if (== (document "readyState") "complete")
+                  (run-code-from-state)
+                  ((window "addEventListener") "load" (lambda () (run-code-from-state))))))
+        </script>
+        <script src="https://cdn.jsdelivr.net/npm/@jcubic/lips@beta/dist/lips.min.js"></script>
+    </body>
+</html>
