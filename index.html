@@ -1,126 +1,194 @@
+<!doctype html>
 <html lang="en">
     <head>
-        <title>Simdi Jinkins</title>
-        <!--<style type="text/css" media="screen">
-            #editor {
-                position: absolute;
-                top: 0;
-                right: 0;
-                bottom: 0;
-                left: 0;
+        <meta charset="UTF-8" />
+        <title>Tau-Prolog Data Server Site</title>
+        <style>
+            body {
+                font-family: monospace;
+                background: #000;
+                color: #0f0;
+                margin: 0;
+                padding: 10px;
             }
-            #buttons {
-                position: absolute;
-                top: 10px;
-                right: 10px;
-                z-index: 10;
+            #teletype {
+                white-space: pre-wrap;
+                word-wrap: break-word;
             }
-        </style>-->
+            #query-input {
+                background: transparent;
+                border: none;
+                color: #0f0;
+                font-family: monospace;
+                width: 100%;
+                outline: none;
+            }
+            #editor-container {
+                display: none;
+                margin: 10px;
+                background: #111;
+                padding: 10px;
+                border: 1px solid #0f0;
+            }
+            #editor-textarea {
+                width: 100%;
+                height: 400px;
+                background: #000;
+                color: #0f0;
+                border: none;
+                font-family: monospace;
+            }
+        </style>
     </head>
-    <body translate="no">
-        <div id="buttons">
-            <button id="run">Run</button>
-        </div>
-        <div id="editor">
-            <h1>I'm Simdi. Pronounced however you pronounce SIMD.</h1>
-            <p>
-                I'm currently working on
-                <a href="https://fontofweb.com"> fontofweb.com</a>
-                <br />
-                A pinterest alternative for web design.
-            </p>
-            <p></p>
-        </div>
+    <body>
+        <div id="teletype"></div>
+        <input id="query-input" placeholder="?- " autocomplete="off" />
 
-        <div id="state" style="display: none"></div>
-        <div id="output" style="color: red"></div>
+        <script type="text/javascript" src="tau-prolog.js"></script>
+
         <script>
-            (function () {
-                // Save the original console.log function
-                var originalLog = console.error;
-                var outputElement = document.getElementById("output");
+            // Core Logic
+            var pl; // Tau Prolog namespace
+            var session = pl.create(); // Create Prolog session
 
-                // Override console.log with a custom function
-                console.error = function (message) {
-                    // First, call the original logger for standard console output
-                    originalLog.apply(console, arguments);
+            var prologCode = `
+            % Ontology facts (pure data and logic)
+            triple('post1', type, 'blogPost').
+            triple('post1', title, 'My First Post').
+            triple('post1', content, 'Hello, world!').
+            triple('post1', image_url, 'https://example.com/image.jpg').
 
-                    // Then, append the message to our HTML element
-                    if (typeof message === "object") {
-                        // Use JSON.stringify for objects to display their content
-                        outputElement.innerHTML +=
-                            (JSON && JSON.stringify
-                                ? JSON.stringify(message, undefined, 2)
-                                : message) + "<br>";
-                    } else {
-                        outputElement.innerHTML += message + "<br>";
-                    }
+            is_blog_post(X) :- triple(X, type, 'blogPost').
+        `;
+
+            // Load initial code
+            session.consult(prologCode, {
+                success: function () {
+                    console.log("Ontology loaded");
+                },
+                error: function (err) {
+                    console.error("Load error:", err);
+                },
+            });
+
+            // Teletype UI Management (all in JS)
+            const teletype = document.getElementById("teletype");
+            const input = document.getElementById("query-input");
+
+            // Function to append to teletype
+            function appendToTeletype(text) {
+                teletype.innerHTML += text + "<br>";
+                teletype.scrollTop = teletype.scrollHeight;
+            }
+
+            // Query Function - Prolog serves data, JS renders
+            function runQuery(goal) {
+                session.query(goal, {
+                    success: function () {
+                        collectAnswers([]);
+                    },
+                    error: function (err) {
+                        appendToTeletype("Error: " + err);
+                    },
+                });
+            }
+
+            function collectAnswers(answers) {
+                session.answer({
+                    success: function (answer) {
+                        answers.push(session.format_answer(answer));
+                        collectAnswers(answers); // Get next
+                    },
+                    fail: function () {
+                        appendToTeletype(answers.join("; ") || "false.");
+                    },
+                    error: function (err) {
+                        appendToTeletype("Exception: " + err);
+                    },
+                    limit: function () {
+                        appendToTeletype("Limit reached.");
+                    },
+                });
+            }
+
+            // Improved Query Parsing
+            function parseGoal(input) {
+                let goal = input.trim();
+                if (goal.startsWith("?-")) goal = goal.slice(2).trim();
+                if (!goal.endsWith(".")) goal += ".";
+                return goal;
+            }
+
+            // Handle Input (teletype style)
+            input.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") {
+                    const userInput = input.value;
+                    appendToTeletype("?- " + userInput + ".");
+                    const goal = parseGoal(userInput);
+                    runQuery(goal);
+                    input.value = "";
+                }
+            });
+
+            // Self-Editing: Triggered purely in JS (Ctrl+E)
+            document.addEventListener("keydown", function (e) {
+                if (e.ctrlKey && e.key === "e") {
+                    openEditor();
+                }
+            });
+
+            function openEditor() {
+                let container = document.getElementById("editor-container");
+                if (!container) {
+                    container = document.createElement("div");
+                    container.id = "editor-container";
+                    document.body.appendChild(container);
+                }
+                container.style.display = "block";
+
+                const textarea = document.createElement("textarea");
+                textarea.id = "editor-textarea";
+                textarea.value = prologCode;
+                container.appendChild(textarea);
+
+                const saveBtn = document.createElement("button");
+                saveBtn.textContent = "Save & Reload";
+                saveBtn.style.background = "#0f0";
+                color = "#000";
+                saveBtn.onclick = function () {
+                    prologCode = textarea.value;
+                    session.consult(prologCode, {
+                        success: function () {
+                            appendToTeletype("Ontology updated.");
+                            downloadUpdatedFile();
+                        },
+                        error: function (err) {
+                            appendToTeletype("Update error: " + err);
+                        },
+                    });
+                    container.style.display = "none";
                 };
-            })();
+                container.appendChild(saveBtn);
+            }
+
+            // Download updated HTML
+            function downloadUpdatedFile() {
+                const updatedHTML = document.documentElement.outerHTML.replace(
+                    /var prologCode = `[\s\S]*?`;/,
+                    "var prologCode = `" +
+                        prologCode.replace(/`/g, "\\`") +
+                        "`;",
+                );
+                const blob = new Blob([updatedHTML], { type: "text/html" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = "personal-site-tau-updated.html";
+                a.click();
+            }
+
+            // Initial Teletype Greeting (ephemeral UI starts minimal)
+            appendToTeletype("Teletype ready. Enter Prolog queries.");
         </script>
-        <script
-            type="text/x-scheme"
-            bootstrap="https://cdn.jsdelivr.net/npm/@jcubic/lips@beta/dist/std.xcb"
-        >
-            (define document globalThis.document)
-            (define window globalThis.window)
-            (define console globalThis.console)
-            (define lips globalThis.lips)
-        </script>
-        <script
-            type="text/x-scheme"
-            bootstrap="https://cdn.jsdelivr.net/npm/@jcubic/lips@beta/dist/std.xcb"
-        >
-            (define Promise globalThis.Promise)
-            (define Array globalThis.Array)
-            (define (load-script-promise url)
-              (new Promise (lambda (resolve reject)
-                (let ((script ((document "createElement") "script")))
-                  (set-obj! script "src" url)
-                  (set-obj! script "onload" resolve)
-                  (set-obj! script "onerror" reject)
-                  (((document "head") "appendChild") script)))))
-            (define preact-url "https://cdn.jsdelivr.net/npm/preact@10.5.5/dist/preact.umd.js")
-            (define ace-url "https://cdnjs.cloudflare.com/ajax/libs/ace/1.43.3/ace.min.js")
-            (define vim-url "https://cdnjs.cloudflare.com/ajax/libs/ace/1.43.3/keybinding-vim.js")
-            (define ace-promise (load-script-promise ace-url))
-            (define vim-promise ((ace-promise "then") (lambda () (load-script-promise vim-url))))
-            (define preact-promise (load-script-promise preact-url))
-            (define (load-editor-state)
-              (let* ((state-div ((document "getElementById") "state"))
-                     (saved-code (or (state-div "textContent") (state-div "innerText")))
-                     (trimmed (if saved-code ((saved-code "trim")) "")))
-                (if (> ((trimmed "length")) 0)
-                    ((editor "setValue") saved-code -1))))
-            (define (save-editor-state)
-              (let ((state-div ((document "getElementById") "state")))
-                (set-obj! state-div "textContent" ((editor "getValue")))))
-            (define (run-code-from-state)
-              (let* ((state-div ((document "getElementById") "state"))
-                     (code (or (state-div "textContent") (state-div "innerText")))
-                     (trimmed (if code ((code "trim")) "")))
-                (if (> ((trimmed "length")) 0)
-                    (let ((promise ((lips "exec") code)))
-                      ((promise "then") (lambda (result) ((console "log") result)))
-                      ((promise "catch") (lambda (e) ((console "error") (e "message"))))))))
-            (((Promise "all") (new Array preact-promise vim-promise)) "then" (lambda ()
-              (define preact globalThis.preact)
-              (define Component preact.Component)
-              (define render preact.render)
-              (define h preact.h)
-              (define ace globalThis.ace)
-              (define editor ((ace "edit") "editor"))
-              ((editor "setTheme") "ace/theme/monokai")
-              (((editor "session") "setMode") "ace/mode/scheme")
-              ((editor "setKeyboardHandler") "ace/keyboard/vim")
-              (load-editor-state)
-              ((editor "on") "change" (lambda () (save-editor-state)))
-              (let ((run-btn ((document "getElementById") "run")))
-                ((run-btn "addEventListener") "click" (lambda () (run-code-from-state))))
-              (if (== (document "readyState") "complete")
-                  (run-code-from-state)
-                  ((window "addEventListener") "load" (lambda () (run-code-from-state))))))
-        </script>
-        <script src="https://cdn.jsdelivr.net/npm/@jcubic/lips@beta/dist/lips.min.js"></script>
     </body>
 </html>
